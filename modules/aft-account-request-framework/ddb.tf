@@ -43,6 +43,8 @@ resource "aws_dynamodb_table" "aft_request_metadata" {
     enabled     = true
     kms_key_arn = aws_kms_key.aft.arn
   }
+
+  deletion_protection_enabled = var.ddb_deletion_protection_enabled
 }
 
 # Table that stores the configuration details for the account vending machine
@@ -66,6 +68,8 @@ resource "aws_dynamodb_table" "aft_request" {
     enabled     = true
     kms_key_arn = aws_kms_key.aft.arn
   }
+
+  deletion_protection_enabled = var.ddb_deletion_protection_enabled
 }
 
 # Table that stores the audit history for the account
@@ -95,6 +99,8 @@ resource "aws_dynamodb_table" "aft_request_audit" {
     enabled     = true
     kms_key_arn = aws_kms_key.aft.arn
   }
+
+  deletion_protection_enabled = var.ddb_deletion_protection_enabled
 }
 
 # Table that stores the audit history for the account
@@ -124,4 +130,6 @@ resource "aws_dynamodb_table" "aft_controltower_events" {
     enabled     = true
     kms_key_arn = aws_kms_key.aft.arn
   }
+
+  deletion_protection_enabled = var.ddb_deletion_protection_enabled
 }
