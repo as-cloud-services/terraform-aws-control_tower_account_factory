@@ -69,3 +69,8 @@ variable "backup_recovery_point_retention" {
 variable "aft_enable_vpc" {
   type = bool
 }
+variable "ddb_deletion_protection_enabled" {
+  description = "Flag to enable or disable deletion protection for DynamoDB tables"
+  type        = bool
+  default     = true
+}
