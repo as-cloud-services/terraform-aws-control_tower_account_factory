@@ -60,8 +60,9 @@ phases:
       - chmod +x $DEFAULT_PATH/api_helpers/pre-api-helpers.sh
       - chmod +x $DEFAULT_PATH/api_helpers/post-api-helpers.sh
 
-      # Read custom fields from target account SSM for Jinja rendering
-      - AFT_ENVIRONMENT=$(aws ssm get-parameter --name "/aft/account-request/custom-fields/environment" --query "Parameter.Value" --output text --profile aft-target 2>/dev/null || echo "")
+      # Read custom field tags from target account SSM for Jinja rendering
+      - AFT_TAGS=$(aws ssm get-parameter --name "/aft/account-request/custom-fields/tags" --query "Parameter.Value" --output text --profile aft-target 2>/dev/null || echo "{}")
+      - echo "{\"aft_tags\": $AFT_TAGS}" > /tmp/aft_tags.json
 
   pre_build:
     on-failure: ABORT
@@ -94,7 +95,7 @@ phases:
 
           # Move back to customization module
           cd $DEFAULT_PATH/terraform
-          for f in *.jinja; do jinja2 $f -D timestamp="$TIMESTAMP" -D tf_distribution_type=$TF_DISTRIBUTION -D provider_region=$CT_MGMT_REGION -D region=$TF_BACKEND_REGION -D aft_admin_role_arn=$AFT_EXEC_ROLE_ARN -D target_admin_role_arn=$VENDED_EXEC_ROLE_ARN -D bucket=$TF_S3_BUCKET -D key=$TF_S3_KEY -D dynamodb_table=$TF_DDB_TABLE -D kms_key_id=$TF_KMS_KEY_ID -D tf_version=$TF_VERSION -D environment="$AFT_ENVIRONMENT" >> ./$(basename $f .jinja).tf; done
+          for f in *.jinja; do jinja2 $f /tmp/aft_tags.json --format=json -D timestamp="$TIMESTAMP" -D tf_distribution_type=$TF_DISTRIBUTION -D provider_region=$CT_MGMT_REGION -D region=$TF_BACKEND_REGION -D aft_admin_role_arn=$AFT_EXEC_ROLE_ARN -D target_admin_role_arn=$VENDED_EXEC_ROLE_ARN -D bucket=$TF_S3_BUCKET -D key=$TF_S3_KEY -D dynamodb_table=$TF_DDB_TABLE -D kms_key_id=$TF_KMS_KEY_ID -D tf_version=$TF_VERSION >> ./$(basename $f .jinja).tf; done
           for f in *.tf; do echo "\n \n"; echo $f; cat $f; done
 
           cd $DEFAULT_PATH/terraform
@@ -108,7 +109,7 @@ phases:
           TF_WORKSPACE_NAME=$VENDED_ACCOUNT_ID-aft-global-customizations
           TF_CONFIG_PATH="./temp_configuration_file.tar.gz"
           cd $DEFAULT_PATH/terraform
-          for f in *.jinja; do jinja2 $f -D timestamp="$TIMESTAMP" -D provider_region=$CT_MGMT_REGION -D tf_distribution_type=$TF_DISTRIBUTION -D aft_admin_role_arn=$AFT_EXEC_ROLE_ARN -D target_admin_role_arn=$VENDED_EXEC_ROLE_ARN -D terraform_org_name=$TF_ORG_NAME -D terraform_workspace_name=$TF_WORKSPACE_NAME -D environment="$AFT_ENVIRONMENT" >> ./$(basename $f .jinja).tf; done
+          for f in *.jinja; do jinja2 $f /tmp/aft_tags.json --format=json -D timestamp="$TIMESTAMP" -D provider_region=$CT_MGMT_REGION -D tf_distribution_type=$TF_DISTRIBUTION -D aft_admin_role_arn=$AFT_EXEC_ROLE_ARN -D target_admin_role_arn=$VENDED_EXEC_ROLE_ARN -D terraform_org_name=$TF_ORG_NAME -D terraform_workspace_name=$TF_WORKSPACE_NAME >> ./$(basename $f .jinja).tf; done
           for f in *.tf; do echo "\n \n"; echo $f; cat $f; done
           cd $DEFAULT_PATH
           tar -czf temp_configuration_file.tar.gz -C terraform --exclude .git --exclude venv .
