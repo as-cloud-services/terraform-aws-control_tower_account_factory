@@ -73,8 +73,9 @@ phases:
           chmod +x $DEFAULT_PATH/aws-aft-core-framework/sources/scripts/creds.sh
           $DEFAULT_PATH/aws-aft-core-framework/sources/scripts/creds.sh
 
-          # Read custom fields from target account SSM for Jinja rendering
-          AFT_ENVIRONMENT=$(aws ssm get-parameter --name "/aft/account-request/custom-fields/environment" --query "Parameter.Value" --output text --profile aft-target 2>/dev/null || echo "")
+          # Read custom field tags from target account SSM for Jinja rendering
+          AFT_TAGS=$(aws ssm get-parameter --name "/aft/account-request/custom-fields/tags" --query "Parameter.Value" --output text --profile aft-target 2>/dev/null || echo "{}")
+          echo "{\"aft_tags\": $AFT_TAGS}" > /tmp/aft_tags.json
         fi
 
 
@@ -114,12 +115,12 @@ phases:
             cd $DEFAULT_PATH/$CUSTOMIZATION/terraform
             if ls *.jinja >/dev/null 2>&1; then
               for f in *.jinja; do
-                jinja2 "$f" -D timestamp="$TIMESTAMP" -D tf_distribution_type="$TF_DISTRIBUTION" \
+                jinja2 "$f" /tmp/aft_tags.json --format=json \
+                  -D timestamp="$TIMESTAMP" -D tf_distribution_type="$TF_DISTRIBUTION" \
                   -D provider_region="$CT_MGMT_REGION" -D region="$TF_BACKEND_REGION" \
                   -D aft_admin_role_arn="$AFT_EXEC_ROLE_ARN" -D target_admin_role_arn="$VENDED_EXEC_ROLE_ARN" \
                   -D bucket="$TF_S3_BUCKET" -D key="$TF_S3_KEY" -D dynamodb_table="$TF_DDB_TABLE" \
-                  -D kms_key_id="$TF_KMS_KEY_ID" -D tf_version="$TF_VERSION" \
-                  -D environment="$AFT_ENVIRONMENT" >> "./$(basename "$f" .jinja).tf"
+                  -D kms_key_id="$TF_KMS_KEY_ID" -D tf_version="$TF_VERSION" >> "./$(basename "$f" .jinja).tf"
               done
             else
               echo "No Jinja2 templates found - skipping template processing"
@@ -144,11 +145,11 @@ phases:
             cd $DEFAULT_PATH/$CUSTOMIZATION/terraform
             if ls *.jinja >/dev/null 2>&1; then
               for f in *.jinja; do
-                jinja2 "$f" -D timestamp="$TIMESTAMP" -D provider_region="$CT_MGMT_REGION" \
+                jinja2 "$f" /tmp/aft_tags.json --format=json \
+                  -D timestamp="$TIMESTAMP" -D provider_region="$CT_MGMT_REGION" \
                   -D tf_distribution_type="$TF_DISTRIBUTION" -D aft_admin_role_arn="$AFT_EXEC_ROLE_ARN" \
                   -D target_admin_role_arn="$VENDED_EXEC_ROLE_ARN" -D terraform_org_name="$TF_ORG_NAME" \
-                  -D terraform_workspace_name="$TF_WORKSPACE_NAME" \
-                  -D environment="$AFT_ENVIRONMENT" >> "./$(basename "$f" .jinja).tf"
+                  -D terraform_workspace_name="$TF_WORKSPACE_NAME" >> "./$(basename "$f" .jinja).tf"
               done
             else
               echo "No Jinja2 templates found - skipping template processing"

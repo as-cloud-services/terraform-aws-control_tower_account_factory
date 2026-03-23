@@ -29,6 +29,9 @@ def lambda_handler(event: Dict[str, Any], context: LambdaContext) -> None:
     target_account_id = event_payload["account_info"]["account"]["id"]
     account_request = event_payload["account_request"]
     custom_fields = json.loads(account_request.get("custom_fields", "{}"))
+    tags = custom_fields.pop("tags", {})
+    if tags:
+        custom_fields["tags"] = json.dumps(tags)
 
     logger = customization_request_logger(
         aws_account_id=target_account_id, customization_request_id=request_id
@@ -48,6 +51,8 @@ def lambda_handler(event: Dict[str, Any], context: LambdaContext) -> None:
                         "ssm:GetParametersByPath",
                         "ssm:PutParameter",
                         "ssm:DeleteParameters",
+                        "ssm:AddTagsToResource",
+                        "ssm:RemoveTagsFromResource",
                     ],
                     "Effect": "Allow",
                     "Resource": f"arn:{utils.get_aws_partition(session)}:ssm:{target_region}:{target_account_id}:parameter{SSM_PARAMETER_PATH}*",
@@ -82,7 +87,7 @@ def lambda_handler(event: Dict[str, Any], context: LambdaContext) -> None:
 
         # Update / Add SSM parameters for custom fields provided
         logger.info(f"Adding/Updating SSM params: {custom_fields}")
-        put_ssm_parameters(target_account_session, custom_fields)
+        put_ssm_parameters(target_account_session, custom_fields, tags=tags)
 
     except Exception as error:
         notifications.send_lambda_failure_sns_message(
