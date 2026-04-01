@@ -51,10 +51,12 @@ def lambda_handler(event: Dict[str, Any], context: LambdaContext) -> None:
                 {
                     "Action": [
                         "ssm:GetParametersByPath",
+                        "ssm:GetParameters",
                         "ssm:PutParameter",
                         "ssm:DeleteParameters",
                         "ssm:AddTagsToResource",
                         "ssm:RemoveTagsFromResource",
+                        "ssm:ListTagsForResource",
                     ],
                     "Effect": "Allow",
                     "Resource": f"arn:{utils.get_aws_partition(session)}:ssm:{target_region}:{target_account_id}:parameter{SSM_PARAMETER_PATH}*",
