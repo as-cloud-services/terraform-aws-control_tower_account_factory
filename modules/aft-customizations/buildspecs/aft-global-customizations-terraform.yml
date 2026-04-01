@@ -62,7 +62,7 @@ phases:
 
       # Read custom field tags from target account SSM for Jinja rendering
       - AFT_TAGS=$(aws ssm get-parameter --name "/aft/account-request/custom-fields/tags" --query "Parameter.Value" --output text --profile aft-target 2>/dev/null || echo "{}")
-      - echo "{\"aft_tags\": $AFT_TAGS}" > /tmp/aft_tags.json
+      - 'echo "{\"aft_tags\": $AFT_TAGS}" > /tmp/aft_tags.json'
 
   pre_build:
     on-failure: ABORT
