@@ -515,9 +515,3 @@ variable "aft_metrics_reporting" {
     error_message = "Valid values for var: aft_metrics_reporting are (true, false)."
   }
 }
-
-variable "tags" {
-  description = "Map of tags to apply to resources deployed by AFT"
-  type        = map(any)
-  default     = {}
-}
