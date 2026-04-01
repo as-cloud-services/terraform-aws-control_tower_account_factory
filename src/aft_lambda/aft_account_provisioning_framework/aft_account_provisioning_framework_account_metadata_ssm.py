@@ -30,6 +30,8 @@ def lambda_handler(event: Dict[str, Any], context: LambdaContext) -> None:
     account_request = event_payload["account_request"]
     custom_fields = json.loads(account_request.get("custom_fields", "{}"))
     tags = custom_fields.pop("tags", {})
+    if isinstance(tags, str):
+        tags = json.loads(tags)
     if tags:
         custom_fields["tags"] = json.dumps(tags)
 
