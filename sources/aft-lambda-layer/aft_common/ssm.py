@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 import logging
-from typing import Dict, List, Sequence
+from typing import Dict, List, Optional, Sequence
 
 from aft_common.aft_utils import (
     get_high_retry_botoconfig,
@@ -16,13 +16,26 @@ logger = logging.getLogger("aft")
 
 
 @resubmit_request_on_boto_throttle
-def put_ssm_parameters(session: Session, parameters: Dict[str, str]) -> None:
+def put_ssm_parameters(
+    session: Session,
+    parameters: Dict[str, str],
+    tags: Optional[Dict[str, str]] = None,
+) -> None:
     client = session.client("ssm", config=get_high_retry_botoconfig())
 
+    tag_list = [{"Key": k, "Value": v} for k, v in tags.items()] if tags else []
+
     for key, value in parameters.items():
-        response = client.put_parameter(
-            Name=SSM_PARAMETER_PATH + key, Value=value, Type="String", Overwrite=True
+        param_name = SSM_PARAMETER_PATH + key
+        client.put_parameter(
+            Name=param_name, Value=value, Type="String", Overwrite=True
         )
+        if tag_list:
+            client.add_tags_to_resource(
+                ResourceType="Parameter",
+                ResourceId=param_name,
+                Tags=tag_list,
+            )
 
 
 @resubmit_request_on_boto_throttle
