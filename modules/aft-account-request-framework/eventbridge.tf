@@ -31,7 +31,7 @@ EOF
 resource "aws_cloudwatch_event_target" "aft_management_event_bus" {
   provider = aws.ct_management
   arn      = aws_cloudwatch_event_bus.aft_from_ct_management.arn
-  rule     = aws_cloudwatch_event_rule.aft_control_tower_events.id
+  rule     = aws_cloudwatch_event_rule.aft_control_tower_events.name
   role_arn = aws_iam_role.aft_control_tower_events.arn
 }
 
@@ -70,5 +70,5 @@ resource "aws_cloudwatch_event_rule" "aft_account_request_processor" {
 
 resource "aws_cloudwatch_event_target" "aft_account_request_processor" {
   arn  = aws_lambda_function.aft_account_request_processor.arn
-  rule = aws_cloudwatch_event_rule.aft_account_request_processor.id
+  rule = aws_cloudwatch_event_rule.aft_account_request_processor.name
 }

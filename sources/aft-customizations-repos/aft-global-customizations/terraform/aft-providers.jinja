@@ -9,6 +9,9 @@ provider "aws" {
   default_tags {
     tags = {
       managed_by                  = "AFT"
+{% for key, value in (aft_tags | default({})).items() %}
+      {{ key | tojson }} = {{ value | tojson }}
+{% endfor %}
     }
   }
 }

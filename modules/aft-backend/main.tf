@@ -234,6 +234,7 @@ resource "aws_iam_policy" "replication" {
                 "StringLike": {
                     "kms:ViaService": "s3.${var.primary_region}.amazonaws.com",
                     "kms:EncryptionContext:aws:s3:arn": [
+                        "${aws_s3_bucket.primary-backend-bucket.arn}",
                         "${aws_s3_bucket.primary-backend-bucket.arn}/*"
                     ]
                 }
@@ -251,6 +252,7 @@ resource "aws_iam_policy" "replication" {
                 "StringLike": {
                     "kms:ViaService": "s3.${var.primary_region}.amazonaws.com",
                     "kms:EncryptionContext:aws:s3:arn": [
+                        "${aws_s3_bucket.primary-backend-bucket.arn}",
                         "${aws_s3_bucket.primary-backend-bucket.arn}/*"
                     ]
                 }
@@ -261,13 +263,15 @@ resource "aws_iam_policy" "replication" {
         },
         {
             "Action": [
-                "kms:Encrypt"
+                "kms:Encrypt",
+                "kms:GenerateDataKey"
             ],
             "Effect": "Allow",
             "Condition": {
                 "StringLike": {
                     "kms:ViaService": "s3.${var.secondary_region}.amazonaws.com",
                     "kms:EncryptionContext:aws:s3:arn": [
+                        "${aws_s3_bucket.secondary-backend-bucket[0].arn}",
                         "${aws_s3_bucket.secondary-backend-bucket[0].arn}/*"
                     ]
                 }

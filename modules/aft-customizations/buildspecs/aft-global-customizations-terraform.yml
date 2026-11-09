@@ -59,13 +59,22 @@ phases:
       # Mark helper scripts as executable
       - chmod +x $DEFAULT_PATH/api_helpers/pre-api-helpers.sh
       - chmod +x $DEFAULT_PATH/api_helpers/post-api-helpers.sh
-      
+
+      # Read custom field tags from target account SSM for Jinja rendering
+      - AFT_TAGS=$(aws ssm get-parameter --name "/aft/account-request/custom-fields/tags" --query "Parameter.Value" --output text --profile aft-target 2>/dev/null || echo "{}")
+      - 'echo "{\"aft_tags\": $AFT_TAGS}" > /tmp/aft_tags.json'
+
   pre_build:
     on-failure: ABORT
     commands:
       - source $DEFAULT_PATH/api-helpers-venv/bin/activate
       - export AWS_PROFILE=aft-target
-      - . $DEFAULT_PATH/api_helpers/pre-api-helpers.sh || exit 1
+      - |
+        if [ "${PLAN_ONLY:-false}" = "true" ]; then
+          echo "Skipping Pre-API Helpers for plan-only run"
+        else
+          . $DEFAULT_PATH/api_helpers/pre-api-helpers.sh || exit 1
+        fi
       - unset AWS_PROFILE
 
   build:
@@ -93,7 +102,8 @@ phases:
           cd $DEFAULT_PATH/terraform
           if ls *.jinja >/dev/null 2>&1; then
             for f in *.jinja; do
-              jinja2 "$f" -D timestamp="$TIMESTAMP" -D tf_distribution_type="$TF_DISTRIBUTION" \
+              jinja2 "$f" /tmp/aft_tags.json --format=json \
+                -D timestamp="$TIMESTAMP" -D tf_distribution_type="$TF_DISTRIBUTION" \
                 -D provider_region="$CT_MGMT_REGION" -D region="$TF_BACKEND_REGION" \
                 -D aft_admin_role_arn="$AFT_EXEC_ROLE_ARN" -D target_admin_role_arn="$VENDED_EXEC_ROLE_ARN" \
                 -D bucket="$TF_S3_BUCKET" -D key="$TF_S3_KEY" -D dynamodb_table="$TF_DDB_TABLE" \
@@ -133,10 +143,11 @@ phases:
           cd $DEFAULT_PATH/terraform
           if ls *.jinja >/dev/null 2>&1; then
             for f in *.jinja; do
-              jinja2 "$f" -D timestamp="$TIMESTAMP" -D provider_region="$CT_MGMT_REGION" \
+              jinja2 "$f" /tmp/aft_tags.json --format=json \
+                -D timestamp="$TIMESTAMP" -D provider_region="$CT_MGMT_REGION" \
                 -D tf_distribution_type="$TF_DISTRIBUTION" -D aft_admin_role_arn="$AFT_EXEC_ROLE_ARN" \
                 -D target_admin_role_arn="$VENDED_EXEC_ROLE_ARN" -D terraform_org_name="$TF_ORG_NAME" \
-                -D terraform_workspace_name="$TF_WORKSPACE_NAME"  >> "./$(basename "$f" .jinja).tf"
+                -D terraform_workspace_name="$TF_WORKSPACE_NAME" >> "./$(basename "$f" .jinja).tf"
             done
           else
             echo "No Jinja2 templates found - skipping template processing"
@@ -183,4 +194,9 @@ phases:
         fi
       - source $DEFAULT_PATH/api-helpers-venv/bin/activate
       - export AWS_PROFILE=aft-target
-      - . $DEFAULT_PATH/api_helpers/post-api-helpers.sh || exit 1
+      - |
+        if [ "${PLAN_ONLY:-false}" = "true" ]; then
+          echo "Skipping Post-API Helpers for plan-only run"
+        else
+          . $DEFAULT_PATH/api_helpers/post-api-helpers.sh || exit 1
+        fi

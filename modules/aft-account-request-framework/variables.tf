@@ -89,3 +89,9 @@ variable "aft_customer_private_subnets" {
 variable "sns_topic_enable_cmk_encryption" {
   type = bool
 }
+
+variable "ddb_deletion_protection_enabled" {
+  description = "Flag to enable or disable deletion protection for DynamoDB tables"
+  type        = bool
+  default     = true
+}
