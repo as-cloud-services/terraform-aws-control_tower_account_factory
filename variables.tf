@@ -217,12 +217,12 @@ variable "aft_feature_delete_default_vpcs_enabled" {
 }
 
 variable "aft_customization_triggers" {
-  description = "List of customization trigger tokens. When non-empty, matching events trigger customization re-execution with provisioning bypass. Valid tokens: account_move. Per-account opt-out via account_skip_customization_triggers attribute in aft-request."
+  description = "List of customization trigger tokens. When non-empty, matching events trigger customization re-execution with provisioning bypass. Valid tokens: account_move, custom_fields_change. Per-account opt-out via account_skip_customization_triggers in aft-request applies only to account_move."
   type        = list(string)
   default     = []
   validation {
-    condition     = alltrue([for t in var.aft_customization_triggers : contains(["account_move"], t)])
-    error_message = "Valid values for var: aft_customization_triggers are: account_move."
+    condition     = alltrue([for t in var.aft_customization_triggers : contains(["account_move", "custom_fields_change"], t)])
+    error_message = "Valid values for var: aft_customization_triggers are: account_move, custom_fields_change."
   }
 }
 
