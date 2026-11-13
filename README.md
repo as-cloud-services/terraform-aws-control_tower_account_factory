@@ -81,11 +81,11 @@ When you enable the HCP Terraform or Terraform Enterprise OIDC integration (`ter
 
 ### Customization Triggers Concurrency
 
-When `aft_customization_triggers` is configured with `["account_move"]`, customization re-executions triggered by account moves bypass the `maximum_concurrent_customizations` throttle. Each account move generates a separate Control Tower event that invokes the provisioning framework independently. Moving many accounts between OUs simultaneously (e.g., a bulk reorganization) may result in concurrent customization executions exceeding the configured maximum. For environments where bulk account moves are expected, consider staggering the moves or implementing EventBridge-layer throttling.
+Each account move or custom-field update starts a separate customization execution for the affected account. These executions check the running-pipeline count independently, so concurrent events can exceed `maximum_concurrent_customizations`. This setting is not a strict fleet-wide cap. Stagger bulk account moves and shared custom-field changes when a strict concurrency limit is required.
 
 ### Customization Triggers Supported Event Paths
 
-Customization triggers are detected from AWS Control Tower `UpdateManagedAccount` events only. When an account is moved to a different OU through Account Factory, the `account_move` trigger fires. This includes AFT-mediated moves, where you change the `ManagedOrganizationalUnit` value in an account request file.
+The `account_move` trigger is detected from AWS Control Tower `UpdateManagedAccount` events only. When an account is moved to a different OU through Account Factory, the `account_move` trigger fires if enabled. This includes AFT-mediated moves, where you change the `ManagedOrganizationalUnit` value in an account request file.
 
 The following paths do **not** emit an `UpdateManagedAccount` event and therefore do not trigger customization re-execution:
 
@@ -94,7 +94,37 @@ The following paths do **not** emit an `UpdateManagedAccount` event and therefor
 
 If an account reaches its target OU through one of these paths, re-run customizations manually via the `aft-invoke-customizations` Step Function.
 
+### Custom Field Changes
 
+Set `aft_customization_triggers = ["custom_fields_change"]` to automatically run customizations when an existing `aft-request` row's `custom_fields` change. The default remains `[]` (disabled); enabling this token does not enable `account_move`.
+
+Detection happens on the DynamoDB stream after Terraform applies a request, normally after merge. PR validation alone does not trigger it. The existing provisioning framework updates the account's SSM parameters first, then invokes `aft-invoke-customizations` for that account with `bypass_steps = ["provisioning_bootstrap"]`.
+
+- All keys under `custom_fields`, including `tags`, are relevant. Changes limited to top-level `account_tags`, `change_management_parameters`, or `account_customizations_name` do not trigger a run. New account requests keep their existing provisioning behavior.
+- Object key order and JSON formatting are ignored. Nested JSON objects and arrays encoded as strings are decoded only for `alternate_contacts`, `sso_groups`, `sso_users`, `tags`, and `service_quotas`. Other strings, scalar types, and list order remain significant.
+- `custom_fields_change` has no per-account opt-out; the global trigger setting controls all eligible accounts. The existing `account_skip_customization_triggers` attribute applies only to the upstream `account_move` detector.
+- The custom-field detector reads `/aft/config/customization-triggers` afresh on each update it processes. Disabling the token affects subsequent detections, including in warm Lambda containers; it does not cancel executions already started. The existing `account_move` detector retains its cached setting.
+- If detection fails, the framework still runs without an automatic customization trigger. The warning identifies the account. Investigate the warning and re-run customizations manually after the SSM update completes. Empty trigger lists are omitted from the payload because the workflow checks whether the key exists.
+- Changes that also alter `control_tower_parameters` (including OU moves) follow the Control Tower path and bypass this detector. Apply the OU change and custom-field change separately, waiting for the OU update to finish, or re-run customizations manually after the combined update completes.
+
+Per-account opt-out is deferred because there is no current use case. If needed later, add a boolean input to the `aft-account-request` Terraform module that writes the top-level `account_skip_customization_triggers` attribute, and add a matching check in the custom-field detector with tests. The flag must be outside `custom_fields`, and should default to allowing customization.
+
+Deploy the fork under a new immutable tag and update both the Terraform module source ref and `aft_framework_repo_git_ref` in the deployment repository, keeping the trigger disabled initially. A tag bump with the same AFT version does not automatically publish a new Lambda layer version. After applying the tag bump, confirm the layer build succeeded from the new ref, then run this task in the `aft-account-factory` Spacelift stack:
+
+```sh
+terragrunt apply -replace=module.aft.module.aft_lambda_layer.aws_lambda_layer_version.layer_version
+```
+
+Review the plan for a layer replacement and function updates to the new layer ARN. Keep account-request activity paused through both applies and the smoke test. Then enable the token and validate a sandbox change before resuming normal request activity; the token applies to all eligible accounts. Repeat the manual replacement for future layer-code releases and rollbacks. Automatic layer republishing is deferred to a separate ticket.
+
+Run the comparison, stream-handler, and audit tests from the repository root with Python 3.12 or later:
+
+```sh
+python -m pip install -e 'sources/aft-lambda-layer[dev]'
+python -m pytest -c sources/aft-lambda-layer/pyproject.toml sources/aft-lambda-layer/tests
+```
+
+The tests mock AWS calls and do not provision accounts or start pipelines.
 
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
@@ -151,7 +181,7 @@ If an account reaches its target OU through one of these paths, re-run customiza
 | <a name="input_aft_codebuild_compute_type"></a> [aft\_codebuild\_compute\_type](#input\_aft\_codebuild\_compute\_type) | The CodeBuild compute type that build projects will use. | `string` | `"BUILD_GENERAL1_MEDIUM"` | no |
 | <a name="input_aft_customer_private_subnets"></a> [aft\_customer\_private\_subnets](#input\_aft\_customer\_private\_subnets) | A list of private subnets to deploy AFT resources in, if customer is providing an existing VPC. Only supported for new deployments. | `list(string)` | `[]` | no |
 | <a name="input_aft_customer_vpc_id"></a> [aft\_customer\_vpc\_id](#input\_aft\_customer\_vpc\_id) | The VPC ID to deploy AFT resources in, if customer is providing an existing VPC. Only supported for new deployments. | `string` | `null` | no |
-| <a name="input_aft_customization_triggers"></a> [aft\_customization\_triggers](#input\_aft\_customization\_triggers) | List of customization trigger tokens. When non-empty, matching events trigger customization re-execution with provisioning bypass. Valid tokens: account\_move. Per-account opt-out via account\_skip\_customization\_triggers attribute in aft-request. | `list(string)` | `[]` | no |
+| <a name="input_aft_customization_triggers"></a> [aft\_customization\_triggers](#input\_aft\_customization\_triggers) | List of customization trigger tokens. When non-empty, matching events trigger customization re-execution with provisioning bypass. Valid tokens: account\_move, custom\_fields\_change. Per-account opt-out via account\_skip\_customization\_triggers in aft-request applies only to account\_move. | `list(string)` | `[]` | no |
 | <a name="input_aft_enable_vpc"></a> [aft\_enable\_vpc](#input\_aft\_enable\_vpc) | Flag turning use of VPC on/off for AFT | `bool` | `true` | no |
 | <a name="input_aft_feature_cloudtrail_data_events"></a> [aft\_feature\_cloudtrail\_data\_events](#input\_aft\_feature\_cloudtrail\_data\_events) | Feature flag toggling CloudTrail data events on/off | `bool` | `false` | no |
 | <a name="input_aft_feature_delete_default_vpcs_enabled"></a> [aft\_feature\_delete\_default\_vpcs\_enabled](#input\_aft\_feature\_delete\_default\_vpcs\_enabled) | Feature flag toggling deletion of default VPCs on/off | `bool` | `false` | no |

@@ -3,7 +3,7 @@
 #
 import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import aft_common.constants
 from aft_common import aft_utils as utils
@@ -15,6 +15,10 @@ from aft_common.account_request_framework import (
     insert_msg_into_acc_req_queue,
 )
 from aft_common.auth import AuthClient
+from aft_common.customization_triggers import (
+    detect_custom_fields_trigger,
+    get_configured_triggers,
+)
 from aft_common.organizations import OrganizationsAgent
 from aft_common.service_catalog import get_account_id_if_enrolled
 from aft_common.shared_account import shared_account_request
@@ -101,6 +105,11 @@ class AccountRequestRecordHandler:
             account_request=account_request,
             control_tower_event=account_provisioning_payload,
         )
+        if self.is_update_action:
+            triggers = self._detect_custom_fields_triggers(account_id)
+            # The workflow checks key existence, so an empty list must be omitted.
+            if triggers:
+                account_customization_payload["customization_triggers"] = triggers
         account_provisioning_stepfunction = ssm.get_ssm_parameter_value(
             self._aft_management_session, aft_common.constants.SSM_PARAM_AFT_SFN_NAME
         )
@@ -110,6 +119,25 @@ class AccountRequestRecordHandler:
             sfn_name=account_provisioning_stepfunction,
             input=json.dumps(account_customization_payload),
         )
+
+    def _detect_custom_fields_triggers(self, account_id: str) -> List[Dict[str, Any]]:
+        try:
+            # Use fresh images: the payload builder mutates the request dictionary.
+            return detect_custom_fields_trigger(
+                old_request=ddb.unmarshal_ddb_item(self._old_image),
+                new_request=ddb.unmarshal_ddb_item(self._new_image),
+                configured_triggers=get_configured_triggers(
+                    self._aft_management_session
+                ),
+            )
+        except Exception as error:
+            logger.warning(
+                "Custom-fields trigger detection failed for account %s: %s. "
+                "Continuing provisioning without an automatic customization run.",
+                utils.sanitize_input_for_logging(account_id),
+                utils.sanitize_input_for_logging(str(error)),
+            )
+            return []
 
     def process_request(self) -> None:
         # Removing account from AFT

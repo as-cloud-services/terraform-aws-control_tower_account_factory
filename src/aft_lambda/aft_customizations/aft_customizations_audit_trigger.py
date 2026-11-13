@@ -39,7 +39,14 @@ def lambda_handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, A
         customization_request_id = event.get("customization_request_id", "")
 
         if customization_triggers:
-            trigger_source = "account_move"
+            trigger_source = ",".join(
+                sorted(
+                    {
+                        trigger.get("type", "unknown")
+                        for trigger in customization_triggers
+                    }
+                )
+            )
         elif bypass_steps:
             trigger_source = "manual"
         else:

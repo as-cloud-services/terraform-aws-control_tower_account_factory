@@ -59,11 +59,13 @@ SSM_PARAM_FEATURE_DEFAULT_VPCS_ENABLED = (
 )
 SSM_PARAM_AFT_CUSTOMIZATION_TRIGGERS = "/aft/config/customization-triggers"
 
-# Trigger token mapping: internal CT field names → customer-facing abstract tokens
+# Trigger token mapping: request field names → customer-facing abstract tokens
 TRIGGER_TOKEN_MAP = {
     "ManagedOrganizationalUnit": "account_move",
+    "custom_fields": "custom_fields_change",
 }
 TRIGGER_TOKEN_ACCOUNT_MOVE = "account_move"  # nosec B105
+TRIGGER_TOKEN_CUSTOM_FIELDS_CHANGE = "custom_fields_change"  # nosec B105
 SSM_PARAM_AFT_DDB_CUSTOMIZATIONS_AUDIT_TABLE = (
     "/aft/resources/ddb/aft-customizations-audit-table-name"
 )
