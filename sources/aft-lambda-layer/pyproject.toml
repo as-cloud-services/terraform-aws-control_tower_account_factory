@@ -49,3 +49,7 @@ dev = [
     "click >= 8.3.3",
     "virtualenv >= 21.14.9",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "../../src"]
